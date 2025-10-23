@@ -1,13 +1,8 @@
 import streamlit as st
-import asyncio
+import subprocess
 import threading
 import time
-import warnings
-import logging
-
-# Suppress Streamlit warnings
-warnings.filterwarnings("ignore", message=".*missing ScriptRunContext.*")
-logging.getLogger("streamlit").setLevel(logging.ERROR)
+import os
 
 st.set_page_config(
     page_title="Braynix Studios Bot",
@@ -32,11 +27,6 @@ st.markdown("""
         background-color: #d4edda;
         border: 1px solid #c3e6cb;
         color: #155724;
-    }
-    .stopped {
-        background-color: #f8d7da;
-        border: 1px solid #f5c6cb;
-        color: #721c24;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -107,40 +97,26 @@ for cmd, desc in commands.items():
 st.markdown("---")
 st.markdown("### 🚀 Bot Status")
 
-# Initialize session state
-if 'bot_started' not in st.session_state:
-    st.session_state.bot_started = False
+# Start bot in background using subprocess
+if 'bot_process' not in st.session_state:
+    try:
+        # Start bot as separate process
+        st.session_state.bot_process = subprocess.Popen(
+            ["python", "bot_runner.py"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=os.path.dirname(__file__) or "."
+        )
+        st.session_state.bot_started = True
+    except Exception as e:
+        st.session_state.bot_started = False
+        st.error(f"Failed to start bot: {e}")
 
-def start_telegram_bot():
-    """Start the Telegram bot in background."""
-    if not st.session_state.bot_started:
-        try:
-            from telegram_bot_controller import main as run_bot
-            
-            def bot_runner():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    run_bot()
-                except Exception as e:
-                    print(f"Bot error: {e}")
-                finally:
-                    loop.close()
-            
-            thread = threading.Thread(target=bot_runner, daemon=True)
-            thread.start()
-            st.session_state.bot_started = True
-            return True
-        except Exception as e:
-            st.error(f"Failed to start bot: {e}")
-            return False
-    return True
-
-# Auto-start bot
-if start_telegram_bot():
+# Display status
+if st.session_state.get('bot_started', False):
     st.markdown('<div class="status-box running">✅ Telegram Bot is running and ready to handle messages!</div>', unsafe_allow_html=True)
 else:
-    st.markdown('<div class="status-box stopped">❌ Bot failed to start. Check logs for details.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="status-box running">⚠️ Bot starting... Please wait a moment.</div>', unsafe_allow_html=True)
 
 # Instructions
 st.markdown("---")
