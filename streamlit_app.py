@@ -1,8 +1,8 @@
 import streamlit as st
-import subprocess
-import sys
+import asyncio
 import threading
 import time
+import os
 from telegram_bot_controller import main as run_bot
 
 st.set_page_config(
@@ -103,25 +103,40 @@ for cmd, desc in commands.items():
 st.markdown("---")
 st.markdown("### 🚀 Bot Control Panel")
 
+# Initialize session state
 if 'bot_running' not in st.session_state:
     st.session_state.bot_running = False
+if 'bot_thread' not in st.session_state:
+    st.session_state.bot_thread = None
+
+def start_bot_in_thread():
+    """Start bot in a separate thread with proper async handling."""
+    def run_async_bot():
+        try:
+            # Create new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # Run the bot
+            run_bot()
+        except Exception as e:
+            print(f"Bot error: {e}")
+            st.session_state.bot_running = False
+        finally:
+            loop.close()
+    
+    if not st.session_state.bot_running:
+        st.session_state.bot_running = True
+        st.session_state.bot_thread = threading.Thread(target=run_async_bot, daemon=True)
+        st.session_state.bot_thread.start()
+        return True
+    return False
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
     if st.button("🟢 Start Bot", disabled=st.session_state.bot_running):
-        if not st.session_state.bot_running:
-            st.session_state.bot_running = True
-            
-            def run_bot_thread():
-                try:
-                    run_bot()
-                except Exception as e:
-                    st.error(f"Bot error: {e}")
-                    st.session_state.bot_running = False
-            
-            thread = threading.Thread(target=run_bot_thread, daemon=True)
-            thread.start()
+        if start_bot_in_thread():
             st.success("Bot started successfully!")
             st.rerun()
 
@@ -129,13 +144,13 @@ with col2:
     if st.button("🔄 Restart Bot"):
         st.session_state.bot_running = False
         time.sleep(1)
-        st.session_state.bot_running = True
-        st.info("Bot restarted!")
-        st.rerun()
+        if start_bot_in_thread():
+            st.info("Bot restarted!")
+            st.rerun()
 
 with col3:
     if st.button("📊 View Logs"):
-        st.info("Check the terminal/console for detailed logs")
+        st.info("Bot logs are displayed in the Streamlit Cloud console")
 
 # Status Display
 if st.session_state.bot_running:
@@ -155,7 +170,7 @@ st.markdown("""
 5. **Get quotes** and connect with the team
 6. **AI assistance** for any questions
 
-**Bot Username:** `@your_bot_username` (configure in BotFather)
+**Bot Username:** Configure in @BotFather on Telegram
 """)
 
 # Footer
@@ -167,15 +182,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Auto-start bot when app loads
-if not st.session_state.bot_running:
-    st.session_state.bot_running = True
-    def auto_start_bot():
-        try:
-            run_bot()
-        except Exception as e:
-            st.error(f"Auto-start failed: {e}")
-            st.session_state.bot_running = False
-    
-    thread = threading.Thread(target=auto_start_bot, daemon=True)
-    thread.start()
+# Auto-start bot when app loads (only once)
+if 'auto_started' not in st.session_state:
+    st.session_state.auto_started = True
+    if start_bot_in_thread():
+        st.success("🤖 Bot auto-started successfully!")
+        time.sleep(1)
+        st.rerun()
