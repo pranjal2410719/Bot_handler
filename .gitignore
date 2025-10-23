@@ -44,3 +44,6 @@ Thumbs.db
 # API Keys (security)
 config.py
 secrets.py
+
+# Streamlit secrets
+.streamlit/secrets.toml
