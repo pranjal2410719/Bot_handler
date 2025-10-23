@@ -1,6 +1,63 @@
 import streamlit as st
 import os
 from google import genai
+import asyncio
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
+# Initialize Telegram bot
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('Welcome to Braynix Studios Bot! How can I help you today?')
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = """
+    Available commands:
+    /start - Start the bot
+    /help - Show this help message
+    /services - List our services
+    /quote - Request a quote
+    
+    You can also chat with our AI assistant by simply sending a message!
+    """
+    await update.message.reply_text(help_text)
+
+async def services_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    services = "\n".join([f"- {service}" for service in SERVICE_PRICING.keys()])
+    await update.message.reply_text(f"Our Services:\n{services}")
+
+async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    quote_text = "Please provide the following information:\n1. Your Name\n2. Contact Details\n3. Service Required\n4. Budget Range"
+    await update.message.reply_text(quote_text)
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        client = init_gemini()
+        system_prompt = """You are Braynix Studios' AI assistant. Focus on our digital services: websites, mobile apps, SaaS, e-commerce, SEO, and analytics. Be professional and encourage users to discuss their project needs."""
+        
+        full_prompt = f"{system_prompt}\n\nUser: {update.message.text}"
+        chat = client.chats.create(model="gemini-2.5-flash")
+        response = chat.send_message(full_prompt)
+        
+        await update.message.reply_text(response.text)
+    except Exception as e:
+        await update.message.reply_text("I'm experiencing technical difficulties. Please try again later.")
+
+@st.cache_resource
+def init_telegram_bot():
+    if "TELEGRAM_BOT_TOKEN" not in st.secrets:
+        st.error("Please set your Telegram bot token in .streamlit/secrets.toml")
+        return None
+    
+    app = Application.builder().token(st.secrets["TELEGRAM_BOT_TOKEN"]).build()
+    
+    # Add handlers
+    app.add_handler(CommandHandler('start', start_command))
+    app.add_handler(CommandHandler('help', help_command))
+    app.add_handler(CommandHandler('services', services_command))
+    app.add_handler(CommandHandler('quote', quote_command))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    return app
 
 # Page config
 st.set_page_config(
@@ -22,6 +79,8 @@ if "lead_data" not in st.session_state:
     st.session_state.lead_data = {}
 if "lead_step" not in st.session_state:
     st.session_state.lead_step = None
+if "bot_running" not in st.session_state:
+    st.session_state.bot_running = False
 
 # Service pricing
 SERVICE_PRICING = {
@@ -182,6 +241,43 @@ with col2:
         st.session_state.lead_step = "name"
         st.session_state.lead_data = {"service": "General Inquiry"}
         st.rerun()
+
+# Telegram Bot Management Section
+st.markdown("---")
+st.header("🤖 Telegram Bot Management")
+
+bot_app = init_telegram_bot()
+
+if bot_app:
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if not st.session_state.bot_running:
+            if st.button("🟢 Start Telegram Bot"):
+                st.session_state.bot_running = True
+                asyncio.run(bot_app.run_polling())
+                st.success("Bot is running!")
+        else:
+            if st.button("🔴 Stop Telegram Bot"):
+                st.session_state.bot_running = False
+                asyncio.run(bot_app.stop())
+                st.info("Bot has been stopped.")
+    
+    with col2:
+        st.markdown("""
+        **Bot Commands:**
+        - `/start` - Welcome message
+        - `/help` - Show available commands
+        - `/services` - List our services
+        - `/quote` - Request a quote
+        """)
+
+else:
+    st.error("Please configure your Telegram bot token in .streamlit/secrets.toml")
+    st.code("""
+# Add this to your .streamlit/secrets.toml file:
+TELEGRAM_BOT_TOKEN = "your-bot-token-here"
+    """)
 
 # Footer
 st.markdown("---")
