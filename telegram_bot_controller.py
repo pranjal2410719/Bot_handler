@@ -11,7 +11,6 @@ from google import genai
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
-logging.getLogger('httpx').setLevel(logging.WARNING)
 
 # API Keys
 TELEGRAM_BOT_TOKEN = "8454185284:AAEOVgJQas-LVC8IwW_YvsLz1SaCXaxKgvA"
@@ -487,7 +486,7 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("🤖 Braynix Studios Bot is starting...")
+    print("Braynix Studios Bot is starting...")
     application.run_polling(
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True,
